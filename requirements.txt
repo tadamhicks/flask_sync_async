@@ -31,3 +31,11 @@ Werkzeug==1.0.1
 zipp==3.4.0
 zope.event==4.5.0
 zope.interface==5.2.0
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation
+opentelemetry-instrumentation-celery
+opentelemetry-instrumentation-flask
+opentelemetry-instrumentation-requests
+opentelemetry-instrumentation-wsgi
+opentelemetry-exporter-otlp-proto-grpc

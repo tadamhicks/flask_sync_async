@@ -1,8 +1,20 @@
 import time
-from celery import Celery
+from celery import Celery, signals
 from celery.utils.log import get_task_logger
 from flask_socketio import SocketIO
 import config
+#import common
+
+import os
+from opentelemetry import trace
+from opentelemetry.instrumentation.celery import CeleryInstrumentor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from grpc import ssl_channel_credentials
+
+
 
 # Setup the logger (compatible with celery version 4)
 logger = get_task_logger(__name__)
@@ -14,6 +26,55 @@ celery.config_from_object("celeryconfig")
 
 # Setup and connect the socket instance to Redis Server
 socketio = SocketIO(message_queue=config.BROKER_URL)
+
+'''
+resource = Resource(attributes={
+    "service.name": 'celery'
+    })
+
+trace_provider = TracerProvider(resource=resource)
+
+otlp_exporter = OTLPSpanExporter(
+    endpoint="api.honeycomb.io:443",
+    insecure=False,
+    credentials=ssl_channel_credentials(),
+    headers=(
+        ("x-honeycomb-team", os.environ['HONEYCOMB_API_KEY']),
+        ("x-honeycomb-dataset", 'celery')
+    )
+)
+
+trace_provider.add_span_processor(
+    BatchSpanProcessor(otlp_exporter)
+)
+trace.set_tracer_provider(trace_provider)
+tracer = trace.get_tracer(__name__)
+'''
+
+
+@signals.worker_process_init.connect(weak=False)
+def initialize_honeycomb(**kwargs):
+    resource = Resource(attributes={
+        "service.name": 'celery'
+        })
+    trace_provider = TracerProvider(resource=resource)
+    otlp_exporter = OTLPSpanExporter(
+        endpoint="api.honeycomb.io:443",
+        insecure=False,
+        credentials=ssl_channel_credentials(),
+        headers=(
+            ("x-honeycomb-team", os.environ['HONEYCOMB_API_KEY']),
+            ("x-honeycomb-dataset", 'celery')
+        )
+    )
+    trace_provider.add_span_processor(
+        BatchSpanProcessor(otlp_exporter)
+    )
+    trace.set_tracer_provider(trace_provider)
+    CeleryInstrumentor().instrument()
+    #common.otel_init()
+
+
 
 ###############################################################################
 def long_sync_task(n):
@@ -55,6 +116,7 @@ def long_async_taskf(data):
 ###############################################################################
 @celery.task(name = 'tasks.long_async_sch_task')
 def long_async_sch_task(data):
+    #with tracer.start_as_current_span('long-async-sch-task'):
     room      = data['sessionid']
     namespace = data['namespase']
     n         = data['waittime']

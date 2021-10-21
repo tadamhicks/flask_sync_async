@@ -14,7 +14,7 @@ from grpc import ssl_channel_credentials
 def otel_init():
 
     resource = Resource(attributes={
-    "service.name": 'celery'
+        "service.name": os.environ['SERVICE_NAME']
     })
 
     trace_provider = TracerProvider(resource=resource)
@@ -25,7 +25,7 @@ def otel_init():
         credentials=ssl_channel_credentials(),
         headers=(
             ("x-honeycomb-team", os.environ['HONEYCOMB_API_KEY']),
-            ("x-honeycomb-dataset", 'celery')
+            ("x-honeycomb-dataset", os.environ['HONEYCOMB_DATASET'])
         )
     )
 
@@ -33,4 +33,5 @@ def otel_init():
         BatchSpanProcessor(otlp_exporter)
     )
     trace.set_tracer_provider(trace_provider)
+    FlaskInstrumentor().instrument()
     CeleryInstrumentor().instrument()

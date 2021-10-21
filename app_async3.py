@@ -8,56 +8,27 @@ import tasks
 from init import app, socketio
 from flask_socketio import join_room
 import json
-
-import os
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import (
-    BatchSpanProcessor
-)
-from opentelemetry.propagate import get_global_textmap
-from opentelemetry.trace import set_span_in_context
-from grpc import ssl_channel_credentials
-
-resource = Resource(attributes={
-    "service.name": 'celery'
-    })
-
-trace_provider = TracerProvider(resource=resource)
-
-otlp_exporter = OTLPSpanExporter(
-    endpoint="api.honeycomb.io:443",
-    insecure=False,
-    credentials=ssl_channel_credentials(),
-    headers=(
-        ("x-honeycomb-team", os.environ['HONEYCOMB_API_KEY']),
-        ("x-honeycomb-dataset", 'celery')
-    )
-)
-
-trace_provider.add_span_processor(
-    BatchSpanProcessor(otlp_exporter)
-)
-trace.set_tracer_provider(trace_provider)
 
 tracer = trace.get_tracer(__name__)
 
 @app.route("/",methods=['GET'])
 def index():
-    # create a unique session ID
-    if 'uid' not in session:
-        sid = str(uuid.uuid4())
-        session['uid'] = sid
-        print("Session ID stored =", sid)
-    return render_template('index3.html')
+    with tracer.start_as_current_span("index"):
+        # create a unique session ID
+        if 'uid' not in session:
+            sid = str(uuid.uuid4())
+            session['uid'] = sid
+            print("Session ID stored =", sid)
+        span = trace.get_current_span()
+        span.set_attribute("uid", session['uid'])
+        return render_template('index3.html')
 
 
 #Run a Post Scheduled Asynchronous Task With Automatic Feedback
 @app.route("/runPSATask",methods=['POST'])
 def long_async_sch_task():
-    with tracer.start_as_current_span("runPSATask"):
+    with tracer.start_as_current_span("run-PSA-Task"):
         print("Running", "/runPSATask")
         # Generate a random number between MIN_WAIT_TIME and MAX_WAIT_TIME
         n = randint(app.config['MIN_WAIT_TIME'], app.config['MAX_WAIT_TIME'])
@@ -71,8 +42,6 @@ def long_async_sch_task():
         data['duration']  = int(request.form['duration'])
 
         span.set_attribute("data", json.dumps(data))
-        headers = {}
-        get_global_textmap().inject(headers, set_span_in_context(span))
 
         #Countdown represents the duration to wait in seconds before running the task
         task = tasks.long_async_sch_task.apply_async(args=[data],countdown=data['duration'])

@@ -20,7 +20,7 @@ pip==20.1.1
 prometheus-client==0.8.0
 pycparser==2.20
 python-engineio==4.1.0
-python-socketio==5.2.1
+python-socketio==5.14.0
 pytz==2020.4
 redis==3.5.3
 setuptools==47.1.0
